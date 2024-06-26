@@ -5,6 +5,7 @@ import zmq
 
 from queue import Queue
 
+from zambeze.campaign.activities import BasicActivity
 from zambeze.orchestration.db.model.activity_model import ActivityModel
 from zambeze.orchestration.db.dao.activity_dao import ActivityDAO
 from zambeze.orchestration.queue.queue_factory import QueueFactory
@@ -168,7 +169,7 @@ class MessageHandler(threading.Thread):
         # Anyone can monitor or terminate.
         self._logger.debug("dos")
 
-        if activity_node[0] in ["MONITOR", "TERMINATOR"]:
+        if activity_node[0] in ["MONITOR", "TERMINATOR"] or isinstance(activity_node[1]["activity"], BasicActivity):
             self._logger.debug("tres")
             plugins_are_configured = True
             actions_are_supported = True

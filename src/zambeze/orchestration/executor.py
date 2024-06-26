@@ -12,6 +12,7 @@ import time
 from queue import Queue, Empty
 from typing import Optional
 
+from zambeze.campaign.activities import BasicActivity
 from zambeze.orchestration.monitor import Monitor
 from zambeze.settings import ZambezeSettings
 from zambeze.orchestration.message.message_factory import MessageFactory
@@ -290,6 +291,24 @@ class Executor(threading.Thread):
                 #     self._logger.debug(
                 #         "Skipping run - error detected when running " "plugin check"
                 #     )
+
+            elif isinstance(activity_msg, BasicActivity):
+                self._logger.info("[exec] BASIC message received:")
+
+                # Execute the basic activity function
+                try:
+                    result = activity_msg.fn(*activity_msg.args, **activity_msg.kwargs)
+                except Exception as e:
+                    status_msg = {
+                        "status": "FAILED",
+                        "activity_id": dag_msg[0],
+                        "msg": "UNABLE TO EXECUTE TASK.",
+                        "details": e,
+                    }
+                    self.to_status_q.put(status_msg)
+                    self._logger.error(f"[exec] Unable to execute task. Caught {e}")
+                    continue
+
             elif activity_msg.data.body.type == "TRANSFER":
                 source_file = activity_msg.data
 
@@ -322,7 +341,7 @@ class Executor(threading.Thread):
                 "status": "SUCCEEDED",
                 "activity_id": dag_msg[0],
                 "msg": "SUCCESSFULLY COMPLETED TASK.",
-                "result": None,
+                "result": result,
             }
             self.to_status_q.put(status_msg)
 

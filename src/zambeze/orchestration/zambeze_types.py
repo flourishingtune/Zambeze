@@ -13,6 +13,7 @@ class MessageType(Enum):
 
 
 class ActivityType(Enum):
+    BASIC = "BASIC"
     SHELL = "SHELL"
     PLUGIN = "PLUGIN"
     TRANSFER = "TRANSFER"

@@ -34,6 +34,10 @@ PluginTemplate = make_dataclass(
     "PluginTemplate", {"type": "PLUGIN", "plugin": "", "parameters": {}}
 )
 
+BasicTemplate = make_dataclass(
+    "BasicTemplate", {"type": "BASIC", "fn": None}
+)
+
 
 @dataclass
 class ShellParams:
@@ -56,6 +60,8 @@ def create_activity_template(activity_type: ActivityType) -> ActivityTemplate:
         template.body = TransferTemplate("TRANSFER", None)
     elif activity_type == ActivityType.PLUGIN:
         template.body = PluginTemplate("PLUGIN", None, None)
+    elif activity_type == ActivityType.BASIC:
+        template.body = BasicTemplate("BASIC", None)
     else:
         raise Exception("Unsupported ActivitityType specified")
     return template
