@@ -139,10 +139,11 @@ class Campaign:
         """
         self._logger.info(f"Number of activities to dispatch: {len(self.activities)}")
         zmq_context = zmq.Context()
-        zmq_socket = zmq_context.socket(zmq.REQ)
+        zmq_socket = zmq_context.socket(zmq.DEALER)
         zmq_socket.setsockopt(zmq.SNDTIMEO, 5000)
         zmq_socket.setsockopt(zmq.RCVTIMEO, 5000)
         zmq_socket.setsockopt(zmq.LINGER, 0)  # Do not linger on close
+        zmq_socket.setsockopt(zmq.IDENTITY, self.campaign_id.encode())
         settings = ZambezeSettings()
         zmq_socket.connect(
             f"tcp://{settings.settings['zmq']['host']}:{settings.settings['zmq']['port']}"
@@ -151,6 +152,7 @@ class Campaign:
         dag = self._pack_dag_for_dispatch()
         serial_dag = dag.serialize_dag()
         self._logger.debug("Sending activity DAG via ZMQ...")
+        act_responses = []
 
         try:
             poller = zmq.Poller()
@@ -164,6 +166,13 @@ class Campaign:
                     # If we receive any message, then we succeeded in REQ/REP. Do not need to parse it.
                     zmq_socket.recv()
                     self._logger.info("Campaign successfully dispatched to Zambeze!")
+
+                    # Start a zmq worker to listen for responses to the campaign
+                    self._logger.debug("Waiting for responses for campaign activities...")
+                    while len(act_responses) < len(self.activities):
+                        zmq_socket.setsockopt(zmq.RCVTIMEO, -1)
+                        response = zmq_socket.recv_json()
+                        act_responses.append(response)
                 else:
                     self._logger.error(
                         "No response received within timeout period. Please try either: "
@@ -182,6 +191,8 @@ class Campaign:
                 " \nAfter installing Zambeze, you may start your agent"
                 ' with "zambeze agent start" and dispatch again.'
             )
+        except KeyboardInterrupt:
+            pass
         finally:
             try:
                 self._logger.debug(
@@ -190,6 +201,7 @@ class Campaign:
                 zmq_socket.close()
                 zmq_context.term()
                 self._logger.debug("Cleanup completed.")
+                return act_responses
 
             except Exception as e:
                 self._logger.error(f"Error during cleanup: {str(e)}")

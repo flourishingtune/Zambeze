@@ -17,7 +17,7 @@ def main():
         return " ".join(reversed(line.split()))
     def count_words(line: str) -> int:
         return len(line.split())
-    line_to_process = "Hello World, how are you?"
+    line_to_process = "Hello World"
 
     # Prepare activities
     rev_words_act = BasicActivity(
@@ -32,7 +32,10 @@ def main():
     )
 
     # Run campaign with the activities
-    Campaign("Words Operations", logger=logger, activities=[rev_words_act, cnt_words_act]).dispatch()
+    campaignExecutionResult = Campaign("Words Operations", logger=logger, 
+                                             activities=[rev_words_act, cnt_words_act]).dispatch()
+    for activityExecutionResult in campaignExecutionResult:
+       logger.info(activityExecutionResult)
 
 
 if __name__ == "__main__":

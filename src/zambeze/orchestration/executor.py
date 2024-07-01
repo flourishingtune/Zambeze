@@ -227,7 +227,25 @@ class Executor(threading.Thread):
                     if total_completed == len(pred_track_dict):
                         break
 
-            if activity_msg.type.upper() == "SHELL":
+            if isinstance(activity_msg, BasicActivity):
+                self._logger.info("[exec] BASIC message received:")
+
+                # Execute the basic activity function
+                try:
+                    result = activity_msg.fn(*activity_msg.args, **activity_msg.kwargs)
+                except Exception as e:
+                    status_msg = {
+                        "status": "FAILED",
+                        "activity_id": dag_msg[0],
+                        "campaign_id": campaign_id,
+                        "msg": "UNABLE TO EXECUTE TASK.",
+                        "details": e,
+                    }
+                    self.to_status_q.put(status_msg)
+                    self._logger.error(f"[exec] Unable to execute task. Caught {e}")
+                    continue
+
+            elif activity_msg.type.upper() == "SHELL":
                 self._logger.info("[exec] SHELL message received:")
 
                 # self._logger.info(activity_msg.data.body)
@@ -251,6 +269,7 @@ class Executor(threading.Thread):
                             status_msg = {
                                 "status": "FAILED",
                                 "activity_id": dag_msg[0],
+                                "campaign_id": campaign_id,
                                 "msg": "UNABLE TO ACQUIRE FILES.",
                                 "details": e,
                             }
@@ -292,23 +311,6 @@ class Executor(threading.Thread):
                 #         "Skipping run - error detected when running " "plugin check"
                 #     )
 
-            elif isinstance(activity_msg, BasicActivity):
-                self._logger.info("[exec] BASIC message received:")
-
-                # Execute the basic activity function
-                try:
-                    result = activity_msg.fn(*activity_msg.args, **activity_msg.kwargs)
-                except Exception as e:
-                    status_msg = {
-                        "status": "FAILED",
-                        "activity_id": dag_msg[0],
-                        "msg": "UNABLE TO EXECUTE TASK.",
-                        "details": e,
-                    }
-                    self.to_status_q.put(status_msg)
-                    self._logger.error(f"[exec] Unable to execute task. Caught {e}")
-                    continue
-
             elif activity_msg.data.body.type == "TRANSFER":
                 source_file = activity_msg.data
 
@@ -340,6 +342,7 @@ class Executor(threading.Thread):
             status_msg = {
                 "status": "SUCCEEDED",
                 "activity_id": dag_msg[0],
+                "campaign_id": campaign_id,
                 "msg": "SUCCESSFULLY COMPLETED TASK.",
                 "result": result,
             }

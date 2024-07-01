@@ -34,7 +34,7 @@ class MessageHandler(threading.Thread):
         self._activity_dao = ActivityDAO(self._logger)
 
         self._zmq_context = zmq.Context()
-        self._zmq_socket = self._zmq_context.socket(zmq.REP)
+        self._zmq_socket = self._zmq_context.socket(zmq.ROUTER)
         self._logger.info("[mh] Binding to random ZMQ port...")
 
         # Bind to a random available port in the range 60000-65000
@@ -102,8 +102,8 @@ class MessageHandler(threading.Thread):
             )
 
             # Use ZMQ to receive activities from campaign.
-            dag_bytestring = self._zmq_socket.recv()
-            self._zmq_socket.send(b"Notification of activity-dag receipt by ZMQ...")
+            campaign_id, dag_bytestring = self._zmq_socket.recv_multipart()
+            self._zmq_socket.send_multipart([campaign_id, b"Notification of activity-dag receipt by ZMQ..."])
             self._logger.debug(
                 "[recv_activity_dag_from_campaign] Received an activity DAG bytestring!"
             )
@@ -270,6 +270,24 @@ class MessageHandler(threading.Thread):
             else:
                 self._logger.debug("[send_activity] Successfully sent activity!")
 
+    def send_activity_states_to_campaign(self, activity_state):
+        """
+        Send activity states to campaign upon completion or failure.
+        """
+
+        try:
+            self._zmq_socket.send(activity_state["campaign_id"].encode(), zmq.SNDMORE)
+            self._zmq_socket.send_json(activity_state)
+
+            self._logger.debug(
+                f"[mh] Sent activity state to campaign for activity: {activity_state['activity_id']}"
+            )
+        except Exception as e:
+            self._logger.error(
+                f"[mh] UNABLE TO SEND ACTIVITY STATE! CAUGHT: {type(e).__name__}: {e}"
+            )
+
+
     def recv_control(self):
         """
         Receive messages from the control channel!
@@ -283,6 +301,10 @@ class MessageHandler(threading.Thread):
             control_msg = pickle.loads(body)
             self._logger.info(" [x recv_control] Received %r" % control_msg)
             self.recv_control_q.put(control_msg)
+
+            # Relay completion / failure states of activities back to campaign
+            if control_msg["activity_id"] not in ["MONITOR", "TERMINATOR"]:
+                self.send_activity_states_to_campaign(control_msg)
 
         queue_client.listen_and_do_callback(
             channel_to_listen="CONTROL", callback_func=callback, should_auto_ack=True
